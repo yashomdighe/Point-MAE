@@ -7,7 +7,67 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 from collections import abc
-from pointnet2_ops import pointnet2_utils
+
+# Try to import pointnet2_ops for hardware-accelerated FPS, fall back to PyTorch3D or pure PyTorch
+try:
+    from pointnet2_ops import pointnet2_utils
+    _FPS_BACKEND = 'pointnet2'
+except ImportError:
+    try:
+        from pytorch3d.ops import sample_farthest_points
+        _FPS_BACKEND = 'pytorch3d'
+    except ImportError:
+        _FPS_BACKEND = 'pure_torch'
+        print("[misc.py] No accelerated FPS available, using pure PyTorch (slower)")
+
+
+def _fps_pure_torch(xyz: torch.Tensor, npoint: int) -> torch.Tensor:
+    """
+    Pure PyTorch implementation of Farthest Point Sampling.
+    
+    Args:
+        xyz: (B, N, 3) tensor of point coordinates
+        npoint: number of points to sample
+    
+    Returns:
+        (B, npoint) tensor of sampled point indices
+    """
+    device = xyz.device
+    B, N, C = xyz.shape
+    
+    centroids = torch.zeros(B, npoint, dtype=torch.long, device=device)
+    distance = torch.ones(B, N, device=device) * 1e10
+    
+    # Random start point
+    farthest = torch.randint(0, N, (B,), dtype=torch.long, device=device)
+    batch_indices = torch.arange(B, dtype=torch.long, device=device)
+    
+    for i in range(npoint):
+        centroids[:, i] = farthest
+        centroid = xyz[batch_indices, farthest, :].view(B, 1, 3)
+        dist = torch.sum((xyz - centroid) ** 2, -1)
+        distance = torch.min(distance, dist)
+        farthest = torch.max(distance, -1)[1]
+    
+    return centroids
+
+
+def _gather_pure_torch(xyz: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+    """
+    Gather points by indices.
+    
+    Args:
+        xyz: (B, N, 3) tensor of point coordinates
+        idx: (B, npoint) tensor of indices
+    
+    Returns:
+        (B, npoint, 3) tensor of gathered points
+    """
+    B, N, C = xyz.shape
+    _, npoint = idx.shape
+    
+    batch_indices = torch.arange(B, device=xyz.device).view(B, 1).expand(-1, npoint)
+    return xyz[batch_indices, idx, :]
 
 
 def fps(data, number):
@@ -15,8 +75,15 @@ def fps(data, number):
         data B N 3
         number int
     '''
-    fps_idx = pointnet2_utils.furthest_point_sample(data, number) 
-    fps_data = pointnet2_utils.gather_operation(data.transpose(1, 2).contiguous(), fps_idx).transpose(1,2).contiguous()
+    if _FPS_BACKEND == 'pointnet2':
+        fps_idx = pointnet2_utils.furthest_point_sample(data, number) 
+        fps_data = pointnet2_utils.gather_operation(data.transpose(1, 2).contiguous(), fps_idx).transpose(1,2).contiguous()
+    elif _FPS_BACKEND == 'pytorch3d':
+        # PyTorch3D returns (sampled_points, sampled_indices)
+        fps_data, _ = sample_farthest_points(data, K=number)
+    else:
+        fps_idx = _fps_pure_torch(data, number)
+        fps_data = _gather_pure_torch(data, fps_idx)
     return fps_data
 
 

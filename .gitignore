@@ -3,7 +3,11 @@
 data/
 best/
 /.idea/
-
+/ycb
 dist/
 build/
 *.egg-info/
+experiments/
+results/
+*.so
+*.pyc

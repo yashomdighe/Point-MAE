@@ -12,7 +12,17 @@ from sklearn.svm import LinearSVC
 import numpy as np
 from torchvision import transforms
 from datasets import data_transforms
-from pointnet2_ops import pointnet2_utils
+
+# Try to import pointnet2_ops, fall back to PyTorch3D
+try:
+    from pointnet2_ops import pointnet2_utils
+    _HAS_POINTNET2 = True
+except ImportError:
+    _HAS_POINTNET2 = False
+    try:
+        from pytorch3d.ops import sample_farthest_points
+    except ImportError:
+        pass
 
 train_transforms = transforms.Compose(
     [
@@ -119,6 +129,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             npoints = config.dataset.train.others.npoints
             dataset_name = config.dataset.train._base_.NAME
             if dataset_name == 'ShapeNet':
+                points = data.cuda()
+            elif dataset_name == 'YCB':
                 points = data.cuda()
             elif dataset_name == 'ModelNet':
                 points = data[0].cuda()

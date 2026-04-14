@@ -8,7 +8,18 @@ from utils.AverageMeter import AverageMeter
 
 import numpy as np
 from datasets import data_transforms
-from pointnet2_ops import pointnet2_utils
+
+# Try to import pointnet2_ops, fall back to PyTorch3D
+try:
+    from pointnet2_ops import pointnet2_utils
+    _HAS_POINTNET2 = True
+except ImportError:
+    _HAS_POINTNET2 = False
+    try:
+        from pytorch3d.ops import sample_farthest_points
+    except ImportError:
+        pass
+
 from torchvision import transforms
 
 

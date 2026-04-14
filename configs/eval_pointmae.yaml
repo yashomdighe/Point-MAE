@@ -1,0 +1,40 @@
+# Point-MAE Evaluation Configuration
+
+# Dataset configuration
+dataset:
+  root: "../E2PN/ycb"
+  type: "ycb"  # Auto-detected, but can specify explicitly
+  use_all: false  # If true, evaluates all objects in dataset
+  objects:  # Only used if use_all is false
+    - "077_rubiks_cube"
+    - "015_peach"
+    - "016_pear"
+    - "007_tuna_fish_can"
+
+# Model configuration
+model:
+  checkpoint: "experiments/pretrain_ycb/cfgs/ycb_finetune/ckpt-last.pth"
+
+# Point cloud configuration
+pointcloud:
+  input_num: 4096
+
+# Augmentation configuration
+# Note: unit_sphere_norm is always True for Point-MAE (hardcoded requirement)
+augmentation:
+  noise_std: 0.001
+  shuffle: true
+
+# Evaluation configuration
+evaluation:
+  num_samples: 500  # For correlation analysis (num rotation pairs)
+  seed: 42
+  device: "cuda"  # cuda or cpu
+  
+  # Rotation sweep specific
+  angle_step: 10.0  # degrees
+  max_angle: 180.0  # degrees
+
+# Output configuration
+output:
+  dir: "results/pointmae_eval"
